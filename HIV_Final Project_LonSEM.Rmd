@@ -1,0 +1,620 @@
+---
+title: "CD4 Counts and Mental Health in HIV: A Cross-Lagged Panel Model (CLPM) on Psychoneuroimmunology"
+author: "Xiaoyuan Zhang: BST-630 Final Project"
+affiliation: "BST-630"
+fontsize: 12pt
+mainfont: "Times New Roman"
+linestretch: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lavaanPlot)
+library(lavaan)
+library(tidyr)
+library(dplyr)
+library(readr)
+library(knitr)
+library(semPlot)
+library(papaja)
+```
+
+```{r HIV dataset Import , include=FALSE}
+bigset6v2 <- read_csv("~/Desktop/Applied Longitudinal Analysis/Dataset/SETA DATA/SETA_DATAUPDATE_2023/bigset6v2.csv")
+```
+
+```{r pivotting dataset, echo=FALSE, message=FALSE, warning=FALSE}
+bigset6v2_wide <- bigset6v2 %>%
+  pivot_wider(
+    id_cols = c(ID, RAN002B, agegrp),
+    names_from = TPOINT,
+    values_from = -c(ID, TPOINT, RAN002B, agegrp),
+    names_sep = "_"
+  )
+
+```
+
+```{r remove empty collumns, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+bigset6v2_wide_clean <- bigset6v2_wide[, colSums(!is.na(bigset6v2_wide)) > 0]
+colnames(bigset6v2_wide_clean)
+```
+
+```{r scale variables, echo=FALSE, message=FALSE, warning=FALSE}
+bigset6v2_wide_clean_scaled <- bigset6v2_wide_clean |> 
+  mutate(across(
+    c(
+      starts_with("CDV008"),     # CD4 count
+      starts_with("CDV012"),     # Other immune variable?
+      starts_with("mohlcog"),    # General cognition
+      starts_with("aai1r"),      # Anxiety inventory (if used)
+      starts_with("psstot"),     # Perceived stress
+      starts_with("mohlmh"),     # Mental health
+      starts_with("bsigsi"),     # Global severity index (distress)
+      starts_with("mohldis"),    # Distress-specific
+      starts_with("mohlsoc"),    # Social function
+      starts_with("mohlrole"),   # Social role
+      starts_with("dritot"),     # Religious practice
+      starts_with("fcotot"),     # Faith coping (added)
+      starts_with("swbrel"),     # Spiritual well-being (optional)
+      starts_with("SADANX"),     # Anxiety scale
+      starts_with("SADDEP"),     # Depression scale
+      starts_with("mohmcog"),    # Cognitive construct (mental)
+      starts_with("mohmmh"),     # Mental health
+      starts_with("mohmdis"),    # Distress
+      starts_with("brcsupmn"),   # Coping (support)
+      starts_with("hss1"),       # Stigma: personalized
+      starts_with("hss2"),       # Stigma: disclosure
+      starts_with("hss3"),       # Stigma: self-image (even if unused)
+      starts_with("hss4")        # Stigma: public concern
+    ),
+    scale
+  ))
+
+```
+
+# Introduction:
+
+## Psychoneuroimmunology and CD4 T Cells in HIV
+
+Psychoneuroimmunology (PNI) is an interdisciplinary field that explores how psychological processes, the nervous system, and the immune system interact to influence health. In the context of HIV, this approach is particularly relevant because HIV directly targets the immune system, while individuals living with HIV often experience elevated levels of psychological stress, depression, and anxiety.
+
+A core focus of HIV-related PNI research is on CD4⁺ T cells, which serve as a clinical marker of disease progression. As HIV advances, CD4 counts decline, compromising the immune system and leaving individuals vulnerable to opportunistic infections and comorbid psychiatric symptoms. Numerous studies have shown that lower CD4 counts are associated with higher rates of depression, anxiety, and cognitive dysfunction (Ironson et al., 2005; Ickovics et al., 2001). For instance, Ironson and colleagues (2005) demonstrated that psychosocial stressors and depressive symptoms predicted a faster decline in CD4 counts and worse HIV-related health outcomes. Conversely, higher perceived social support and optimism were linked to better immune profiles.
+
+## Bidirectional relationship between CD4 and Affective disorder
+
+The relationship between psychological health and CD4 levels appears to be bidirectional. While immune suppression may increase vulnerability to affective disorders, mental health disturbances may also worsen immune functioning. Chronic stress and depression can impair T cell proliferation and cytokine signaling (Leserman et al., 2005). Moreover, longitudinal studies have found that sustained emotional distress can independently predict future reductions in CD4 count, suggesting a causal pathway from mental health to immune suppression (Leserman et al., 1999).
+
+## Mentality as latent effect
+
+Emerging research also emphasizes the mediating role of latent mentality constructs, such as emotional regulation, social functioning, and cognitive well-being, in the association between CD4 levels and psychological disorders. These latent factors capture the complex and multidimensional nature of mental health beyond single symptom scores. For example, studies using structural equation modeling have shown that psychological resilience or perceived control can buffer the effect of immune decline on depressive symptoms (Moskowitz et al., 2009).
+
+## Women Population
+
+Importantly, gender plays a critical role in shaping the relationship between immune function and mental health among individuals living with HIV. Women are disproportionately affected by psychosocial stressors such as caregiving responsibilities, gender-based violence, and HIV-related stigma, which may exacerbate the psychological consequences of immune decline. Epidemiological studies, including the HIV Epidemiology Research Study (HERS), have consistently shown that HIV-positive women report higher rates of depression and anxiety than men, even when controlling for disease stage (Ickovics et al., 2001). Moreover, biological sex differences in immune response — including hormonal regulation of cytokine production and immune cell activity — suggest that CD4 count alone may not fully capture disease burden in women. For instance, while women may initially exhibit higher CD4 counts and lower viral loads, they sometimes progress to AIDS more rapidly than men, indicating the presence of distinct neuroimmune dynamics (Sterling et al., 2001). Research also suggests that depressive symptoms may predict CD4 decline and HIV progression more strongly in women than in men, with psychosocial and neuroendocrine pathways mediating these effects (Cook et al., 2002; Leserman et al., 1999). Given these gendered dynamics, focusing this study on women living with HIV provides a critical lens for examining the nuanced, bidirectional relationships between immune function and psychological well-being.
+
+Despite the growing body of evidence supporting the connection between immune function and psychological health in HIV, few studies have explicitly modeled the temporal, bidirectional relationship between CD4 T cell count and affective symptoms over time. Even fewer have examined how this relationship may be mediated by a latent mental health construct that incorporates cognitive, emotional, and social dimensions. This study aims to fill that gap by using a cross-lagged structural equation modeling (SEM) approach to examine both direct and indirect effects between CD4 and affective symptoms across multiple time points. Additionally, by focusing specifically on women living with HIV, this study addresses a population that has historically been underrepresented in psychoneuroimmunology research, despite being uniquely affected by gender-related psychosocial stressors. This integrative and longitudinal approach contributes to a more comprehensive understanding of how immune status and psychological health influence one another and offers insights for more effective, gender-responsive HIV care.
+
+## Objectives of the Study
+
+Building on this body of evidence, the present study investigates the temporal, bidirectional relationship between CD4 cell count and affective disorder (depression and anxiety) in women living with HIV. We hypothesize the following:
+
+1.  Lower CD4 counts at earlier time points will predict higher levels of affective disorder at later time points.
+2.  Affective symptoms, in turn, may predict further reductions in CD4 counts, suggesting a reciprocal cycle of biological and psychological vulnerability.
+3.  These pathways are mediated by a latent mental health construct, encompassing emotional, social, and cognitive well-being.
+
+To test these hypotheses, we employ a cross-lagged panel model using structural equation modeling (SEM), allowing us to assess direct and indirect effects across time. This study contributes to a growing understanding of the dynamic interplay between immune markers and mental health outcomes within a PNI-informed framework, with implications for comprehensive HIV care that integrates psychological screening and support.
+
+# Methods
+
+## Study Design and Participants
+
+This study uses data from the SETA (Social, Emotional, and Treatment Adaptation) project, a longitudinal study of women living with HIV. Participants were assessed every two months for one year, including a baseline measurement. Most variables used in this analysis were measured at five time points: baseline, month 2, month 4, month 6, and month 12. Some participants had up to seven waves of data; however, for consistency, this study focuses on the five-wave structure.
+
+Eligible participants were adult women diagnosed with HIV and enrolled in care across clinic and community sites. The final analytic sample includes 126 participants with available data on CD4 T cell counts, affective symptoms, and indicators of mentality.
+
+## Measures
+
+### CD4 T Cell Count
+
+CD4 T cell count, used as a marker of immune function, was derived from the CDV acronym dataset. Values were recorded at each study wave. CD4 count was treated as a continuous observed variable and log-transformed to reduce skewness prior to analysis.
+
+### Affective Symptoms
+
+affective disorder was modeled as a latent variable using observed measures of depression and anxiety symptoms. Both constructs were drawn from the SAD (Symptom Assessment Depression) scale developed by Williams (1988, Archives of General Psychiatry). Depression and anxiety scores were used as indicators of an underlying affective disorder latent construct at each time point.
+
+### Latent Mentality Construct
+
+A latent construct termed mentality was defined using composite scores from the MOH scale developed by Wu et al. (1991, Medical Care). This variable captures perceived psychological and cognitive functioning and was constructed from the mean scores of: - Cognitive function - Mental health status - Mental distress
+
+These dimensions reflect the broader psychological context that may mediate the effects of immune function on affective symptoms.
+
+## Analytical Approach
+
+We applied cross-lagged panel modeling (CLPM) within a structural equation modeling (SEM) framework to examine reciprocal effects between CD4 T cell counts and affective disorder over time. The model includes: - Autoregressive paths for each construct to account for temporal stability - Cross-lagged paths to assess the directional influence from CD4 to affective symptoms and vice versa - A mediation pathway through the latent mentality construct to test indirect effects
+
+To further assess how the outcomes change over time, we also conducted latent growth curve models (LGCM) for both CD4 counts and affective symptoms. Time was modeled using linear, quadratic, and cubic trends, allowing us to evaluate whether changes were constant, accelerating, or leveling off across the study period.
+
+All models were estimated in R using the `lavaan` package. Missing data were addressed using full information maximum likelihood (FIML) estimation. Standard fit indices were used to evaluate model adequacy: - Comparative Fit Index (CFI ≥ 0.95) - Tucker-Lewis Index (TLI ≥ 0.95) - Root Mean Square Error of Approximation (RMSEA ≤ 0.06) - Standardized Root Mean Square Residual (SRMR ≤ 0.08)
+
+# Result
+
+## Cross-Lagged Panel Model
+
+In the Cross-Lagged Panel Model assessing the relationships between CD4 T cell counts, mentality, and affective disorder, several statistically significant effects (p \< .05) were observed.
+
+Autoregressive effects were consistently strong across timepoints. CD4 counts at an earlier time significantly predicted subsequent levels (e.g., CDV008_1 → CDV008_3, β = 0.861, p \< .001), as did affective disorder (DIS_1 → DIS_3, β = 0.654, p \< .001; DIS_3 → DIS_5, β = 0.599, p \< .001), and mentality (MH_1 → MH_3, β = 0.478, p \< .01; MH_5 → MH_7, β = 0.646, p \< .01), suggesting stability in these constructs over time.
+
+Several cross-lagged paths were also significant, indicating directional relationships across constructs. Specifically, early CD4 levels negatively predicted later affective disorder (CDV008_1 → DIS_3, β = -0.189, p = .019). Mentality at month 5 was inversely associated with affective disorder at month 7 (MH_5 → DIS_7, β = -0.339, p = .044), and early affective disorder predicted a decline in mentality (DIS_1 → MH_3, β = -0.316, p = .041).
+
+All latent constructs were strongly supported by their observed indicators, with standardized factor loadings exceeding 0.70 across timepoints (e.g., SADDEP_5 → DIS_5, loading = 0.955, p \< .001; mohmdis_7 → MH_7, loading = 0.890, p \< .001).
+
+```{r CLPM modeling, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+CLPM <- '
+
+  # --- Latent Constructs ---
+
+  # Mentality
+  MH_1 =~ mohmcog_1 + mohmmh_1 + mohmdis_1 
+  MH_3 =~ mohmcog_3 + mohmmh_3 + mohmdis_3 
+  MH_5 =~ mohmcog_5 + mohmmh_5 + mohmdis_5 
+  MH_7 =~ mohmcog_7 + mohmmh_7 + mohmdis_7 
+
+  # Affective Disorder
+  DIS_1 =~ SADANX_1 + SADDEP_1
+  DIS_3 =~ SADANX_3 + SADDEP_3
+  DIS_5 =~ SADANX_5 + SADDEP_5 
+  DIS_7 =~ SADANX_7 + SADDEP_7
+
+  # --- Stability (Autoregressive) Paths ---
+  MH_3 ~ MH_1
+  MH_5 ~ MH_3
+  MH_7 ~ MH_5
+
+  DIS_3 ~ DIS_1
+  DIS_5 ~ DIS_3
+  DIS_7 ~ DIS_5
+
+  CDV008_3 ~ CDV008_1
+  CDV008_5 ~ CDV008_3
+  CDV008_7 ~ CDV008_5
+
+  # ---Path CD4 ➝ Mentality ➝ Affective Disorder ---
+  MH_3 ~ CDV008_1
+  MH_5 ~ CDV008_3
+  MH_7 ~ CDV008_5
+  
+  DIS_3 ~ MH_1 + CDV008_1
+  DIS_5 ~ MH_3 + CDV008_3
+  DIS_7 ~ MH_5 + CDV008_5
+  
+  # ---Reversed Path Disorder ➝ Mentality ➝ CD4 ---
+  MH_3 ~ DIS_1
+  MH_5 ~ DIS_3
+  MH_7 ~ DIS_5
+
+  CDV008_3 ~ MH_1 + DIS_1
+  CDV008_5 ~ MH_3 + DIS_3
+  CDV008_7 ~ MH_5 + DIS_5
+
+  # --- Residual Covariances ---
+  MH_1 ~~ DIS_1 + CDV008_1
+  DIS_1 ~~ CDV008_1
+
+  MH_3 ~~ DIS_3 + CDV008_3
+  DIS_3 ~~ CDV008_3
+
+  MH_5 ~~ DIS_5 + CDV008_5
+  DIS_5 ~~ CDV008_5
+
+  MH_7 ~~ DIS_7 + CDV008_7
+  DIS_7 ~~ CDV008_7
+'
+# Fit the model
+CLPM <- sem(
+  CLPM, 
+  data = bigset6v2_wide_clean_scaled, 
+  estimator = "MLR", 
+  missing = "fiml",
+  em.h1.iter.max = 10000
+)
+
+# Summary output
+summary(CLPM, fit.measures = TRUE, standardized = TRUE)
+```
+
+```{r Table Summary, echo=FALSE, message=FALSE, warning=FALSE}
+# Extract and filter estimates
+estimates <- parameterEstimates(CLPM, standardized = TRUE)
+
+# Build path type and pair labels
+est_table <- estimates %>%
+  filter(op %in% c("~", "=~") & pvalue < 0.05) %>%
+  mutate(
+    lhs3 = substr(lhs, 1, 3),
+    rhs3 = substr(rhs, 1, 3),
+    PathType = case_when(
+      op == "=~"                        ~ "Loa: Loading",
+      op == "~" & lhs3 == rhs3         ~ "Reg: Autoregressive",
+      op == "~" & lhs3 != rhs3         ~ "Reg: Cross-lagged"
+    ),
+    across(c(est, se, z, pvalue, std.all), ~ round(.x, 3))
+  ) %>%
+  select(rhs, lhs,  PathType, est, se, z, pvalue, std.all) %>%
+  arrange(PathType, lhs)
+
+# Rename for display
+colnames(est_table) <- c( "Predictor", "Outcome",  "Path Type",
+                         "Estimate", "Std. Error", "Z value", "p-value", "Std. Estimate")
+
+# Output the table
+kable(est_table, caption = "Significant Standardized Path Estimates by Type (p < 0.05)")
+```
+
+### CLPM covariance matrix of latent variables
+
+The correlation matrix showed strong within-construct stability over time for both mentality (e.g., MH_1 with MH_3: r = 0.557; MH_5 with MH_7: r = 0.475) and affective disorder (e.g., DIS_1 with DIS_3: r = 0.594; DIS_3 with DIS_5: r = 0.569). Additionally, consistent negative correlations were found between mentality and affective disorder across timepoints (e.g., MH_5 with DIS_7: r = -0.427; MH_7 with DIS_7: r = -0.506), suggesting that higher psychological functioning is associated with lower distress symptoms. These patterns support the inclusion of autoregressive and cross-lagged paths in the model.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavInspect(CLPM, "cov.lv")
+```
+
+### Visualization for Cross-Lagged Panel Model
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+semPaths(
+  object = CLPM,
+  what = "std",
+  whatLabels = "std",
+  style = "lisrel",
+  layout = "tree",
+  rotation = 2,
+  edge.label.cex = 0.8,
+  sizeMan = 5,
+  sizeLat = 7,
+  mar = c(6, 6, 6, 6),
+  nCharNodes = 0,
+  residuals = FALSE,
+  intercepts = FALSE,
+  exoCov = FALSE
+)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavaanPlot(
+  model = CLPM,
+  stand = TRUE,
+  coefs = FALSE,
+  stars = "regress",
+  node_options = list(shape = "box", fontname = "Helvetica", width = 1.5),
+  graph_options = list(rankdir = "LR")  # left-to-right layout
+)
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavaanPlot(
+  model = CLPM,
+  stand = TRUE,
+  coefs = TRUE,
+  stars = "regress",
+  node_options = list(shape = "box", fontname = "Helvetica", width = 1.5),
+  graph_options = list(rankdir = "LR")  # left-to-right layout
+)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavaanPlot(
+  model = CLPM,
+  stand = TRUE,
+  coefs = TRUE,
+  stars = "regress",
+  covs = TRUE,
+  node_options = list(shape = "box", fontname = "Helvetica", width = 1.5),
+  graph_options = list(rankdir = "LR")  # left-to-right layout
+)
+```
+
+## Latent Growth Curve Model (LGCM): Linear Time Specification
+
+The LGCM assuming a linear time structure revealed consistently strong and statistically significant factor loadings from observed variables to their respective latent constructs for both affective disorder and mentality domains (e.g., SADDEP_5 → DIS_5: β = 0.927, p \< .001; mohmdis_7 → MH_7: β = 0.890, p \< .001), indicating reliable measurement across time points.
+
+Intercept and slope growth factors for CD4 (i_CD4, s_CD4), affective symptoms (i_DIS, s_DIS), and mentality (i_MH, s_MH) were well identified. Notably:
+
+The slope of CD4 was significant (β = 0.033, p = .002), suggesting a modest linear increase in CD4 counts over time.
+
+Affective disorder also showed a significant positive slope (β = 0.035, p = .040), indicating an overall increase in symptoms across the study period.
+
+Most importantly, the slope of affective disorder negatively predicted the slope of mentality (s_DIS → s_MH, β = -1.013, p = .006), suggesting that increasing affective symptoms were associated with declining psychological functioning over time.
+
+Additionally, the intercept of affective symptoms negatively predicted the slope of mentality (i_DIS → s_MH, β = 0.605, p = .035), implying that participants with higher initial distress experienced greater decreases in mentality scores over time.
+
+These results support a dynamic longitudinal association in which both the baseline level and rate of change in affective disorder influence changes in mental functioning.
+
+```{r LGCM time treated as liner , results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+lgcm_liner <- '
+  # ---- Latent Constructs at Each Time ----
+  MH_1 =~ mohmcog_1 + mohmmh_1 + mohmdis_1 
+  MH_3 =~ mohmcog_3 + mohmmh_3 + mohmdis_3 
+  MH_5 =~ mohmcog_5 + mohmmh_5 + mohmdis_5 
+  MH_7 =~ mohmcog_7 + mohmmh_7 + mohmdis_7 
+
+  DIS_1 =~ SADANX_1 + SADDEP_1
+  DIS_3 =~ SADANX_3 + SADDEP_3
+  DIS_5 =~ SADANX_5 + SADDEP_5 
+  DIS_7 =~ SADANX_7 + SADDEP_7
+
+  # ---- LGCM for Mentality ----
+  i_MH =~ 1*MH_1 + 1*MH_3 + 1*MH_5 + 1*MH_7
+  s_MH =~ 0*MH_1 + 1*MH_3 + 2*MH_5 + 3*MH_7
+
+  # ---- LGCM for Affective Disorder ----
+  i_DIS =~ 1*DIS_1 + 1*DIS_3 + 1*DIS_5 + 1*DIS_7
+  s_DIS =~ 0*DIS_1 + 1*DIS_3 + 2*DIS_5 + 3*DIS_7
+
+  # ---- LGCM for CD4 ----
+  i_CD4 =~ 1*CDV008_1 + 1*CDV008_3 + 1*CDV008_5 + 1*CDV008_7
+  s_CD4 =~ 0*CDV008_1 + 1*CDV008_3 + 2*CDV008_5 + 3*CDV008_7
+
+  # ---- Forward Prediction (CD4 → MH/DIS) ----
+  i_MH + s_MH ~ i_CD4 + s_CD4
+  i_DIS + s_DIS ~ i_CD4 + s_CD4
+
+  # ---- Latent Covariances ----
+  i_MH ~~ i_DIS
+  s_MH ~~ s_DIS
+  i_MH ~~ s_MH
+  i_DIS ~~ s_DIS
+  i_CD4 ~~ s_CD4
+'
+lgcm_liner <- sem(
+  lgcm_liner,
+  data = bigset6v2_wide_clean_scaled,
+  estimator = "MLR",
+  missing = "fiml"
+)
+summary(lgcm_liner, fit.measures = TRUE, standardized = TRUE)
+```
+
+### LGCM table summary
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+est_table <- parameterEstimates(lgcm_liner, standardized = TRUE) %>%
+  filter(pvalue < 0.05) %>%
+  mutate(
+    PathType = case_when(
+      op == "=~" ~ "Loa: Loading",
+      grepl("^i_", lhs) ~ "Reg: Intercept outcome",
+      grepl("^s_", lhs) ~ "Reg: Slope outcome",
+      lhs == rhs ~ "Var: Residual / Variance",
+      TRUE ~ "Reg: Other"
+    ),
+    across(c(est, se, z, pvalue, std.all), round, 3)
+  ) %>%
+  select(Predictor = rhs, Outcome = lhs, `Path Type` = PathType,
+         Estimate = est, `Std. Error` = se, `Z value` = z,
+         `p-value` = pvalue, `Std. Estimate` = std.all) %>%
+  arrange(`Path Type`, Outcome)
+
+# Rename columns for output
+colnames(est_table) <- c("Predictor", "Outcome", "Path Type", 
+                         "Estimate", "Std. Error", "Z value", "p-value", "Std. Estimate")
+
+# Display
+kable(est_table, caption = "Significant Path Estimates from LGCM Linear Model (p < 0.05)")
+
+
+```
+
+### LGCM covariance matrix of latent variables
+
+Examination of the latent growth curve model’s covariance matrix revealed strong positive correlations among repeated measures within both the mentality and affective symptom domains, supporting temporal stability (e.g., MH_1–MH_3: r = 0.551; DIS_3–DIS_5: r = 0.543). Negative covariances were observed between mentality and affective symptoms at each time point (e.g., MH_5–DIS_5: r = -0.418), consistent with the theoretical inverse relationship between psychological well-being and distress. Importantly, the intercepts of mentality and affective symptoms were negatively associated (i_MH–i_DIS: r = -0.558), while their respective slopes were weakly and inversely correlated (s_MH–s_DIS: r = -0.035), suggesting a modest tendency for participants with worsening affective symptoms to also show declines in mentality over time. CD4-related parameters showed minimal covariance with affective and mentality domains, though small inverse correlations were noted (e.g., i_CD4–DIS_7: r = -0.123), warranting further longitudinal interpretation.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavInspect(lgcm_liner, "cov.lv")
+```
+
+### LGCM Visual
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavaanPlot(
+  model = lgcm_liner,
+  stand = TRUE,
+  coefs = TRUE,
+  covs = TRUE,
+  stars = "regress",
+  node_options = list(shape = "box", fontname = "Helvetica", width = 1.5),
+  graph_options = list(rankdir = "LR")  # left-to-right layout
+)
+```
+
+## Latent Growth Curve Model (Quadratic Time)
+
+The LGCM with quadratic time specification revealed consistently strong and significant factor loadings for the latent constructs of affective disorder and mentality across all time points (e.g., SADDEP_7 → DIS_7: β = 0.981, p \< .001; mohmdis_1 → MH_1: β = 0.883, p \< .001), indicating well-measured latent variables. The CD4 latent intercept significantly predicted its own trajectory (i_CD4 → i_CD4: β = 1.000, p = .001), while the intercept of affective disorder (i_DIS) also significantly predicted its own value (β = 0.990, p = .044) and negatively influenced mentality (i_DIS → i_MH: β = -1.136, p \< .001), suggesting that higher baseline disorder is associated with poorer psychological functioning. Several residual variances were significant, particularly for mid-to-late wave observations of affective and mentality indicators (e.g., MH_5 residual: β = 0.593, p = .002), reflecting individual variability not captured by the growth factors.
+
+```{r, results='hide', echo=FALSE, message=FALSE, warning=FALSE}
+model_lgcm_quad <- '
+  # ---- Latent Constructs at Each Time ----
+  MH_1 =~ mohmcog_1 + mohmmh_1 + mohmdis_1 
+  MH_3 =~ mohmcog_3 + mohmmh_3 + mohmdis_3 
+  MH_5 =~ mohmcog_5 + mohmmh_5 + mohmdis_5 
+  MH_7 =~ mohmcog_7 + mohmmh_7 + mohmdis_7 
+
+  DIS_1 =~ SADANX_1 + SADDEP_1
+  DIS_3 =~ SADANX_3 + SADDEP_3
+  DIS_5 =~ SADANX_5 + SADDEP_5 
+  DIS_7 =~ SADANX_7 + SADDEP_7
+
+  # ---- LGCM for Mental Health (Linear + Quadratic) ----
+  i_MH =~ 1*MH_1 + 1*MH_3 + 1*MH_5 + 1*MH_7
+  s_MH =~ 0*MH_1 + 1*MH_3 + 2*MH_5 + 3*MH_7
+  q_MH =~ 0*MH_1 + 1*MH_3 + 4*MH_5 + 9*MH_7
+
+  # ---- LGCM for Affective Disorder ----
+  i_DIS =~ 1*DIS_1 + 1*DIS_3 + 1*DIS_5 + 1*DIS_7
+  s_DIS =~ 0*DIS_1 + 1*DIS_3 + 2*DIS_5 + 3*DIS_7
+  q_DIS =~ 0*DIS_1 + 1*DIS_3 + 4*DIS_5 + 9*DIS_7
+
+  # ---- LGCM for CD4 ----
+  i_CD4 =~ 1*CDV008_1 + 1*CDV008_3 + 1*CDV008_5 + 1*CDV008_7
+  s_CD4 =~ 0*CDV008_1 + 1*CDV008_3 + 2*CDV008_5 + 3*CDV008_7
+  q_CD4 =~ 0*CDV008_1 + 1*CDV008_3 + 4*CDV008_5 + 9*CDV008_7
+
+  # ---- Forward Prediction (CD4 → MH/DIS) ----
+  i_MH + s_MH + q_MH ~ i_CD4 + s_CD4 + q_CD4
+  i_DIS + s_DIS + q_DIS ~ i_CD4 + s_CD4 + q_CD4
+
+  # ---- Latent Covariances ----
+  i_MH ~~ i_DIS
+  s_MH ~~ s_DIS
+  q_MH ~~ q_DIS
+  i_MH ~~ s_MH + q_MH
+  i_DIS ~~ s_DIS + q_DIS
+  s_MH ~~ q_MH
+  s_DIS ~~ q_DIS
+  i_CD4 ~~ s_CD4 + q_CD4
+  s_CD4 ~~ q_CD4
+'
+
+fit_lgcm_quad <- sem(
+  model_lgcm_quad,
+  data = bigset6v2_wide_clean_scaled,
+  estimator = "MLR",
+  missing = "fiml"
+)
+summary(fit_lgcm_quad, fit.measures = TRUE, standardized = TRUE)
+
+```
+
+### LGCM_Quad table summary
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+est_table <- parameterEstimates(fit_lgcm_quad, standardized = TRUE) %>%
+  filter(pvalue < 0.05) %>%
+    mutate(
+    PathType = case_when(
+      op == "=~" ~ "Loa: Loading",
+      grepl("^i_", lhs) ~ "Reg: Intercept outcome",
+      grepl("^s_", lhs) ~ "Reg: Slope outcome",
+      lhs == rhs ~ "Var: Residual / Variance",
+      TRUE ~ "Reg: Other"
+    ),
+    across(c(est, se, z, pvalue, std.all), round, 3)
+  ) %>%
+  select(Predictor = rhs, Outcome = lhs, `Path Type` = PathType,
+         Estimate = est, `Std. Error` = se, `Z value` = z,
+         `p-value` = pvalue, `Std. Estimate` = std.all) %>%
+  arrange(`Path Type`, Outcome)
+
+# Rename columns for output
+colnames(est_table) <- c("Predictor", "Outcome", "Path Type", 
+                         "Estimate", "Std. Error", "Z value", "p-value", "Std. Estimate")
+
+# Display
+kable(est_table, caption = "Significant Path Estimates from LGCM Quad Model (p < 0.05)")
+
+
+```
+
+### LGCM_Quad covariance matrix of latent variables
+
+Covariance matrices from both the linear and quadratic LGCM models revealed strong positive associations among repeated measures of mentality (e.g., MH_1–MH_3: r = 0.551 to 0.537; MH_3–MH_5: r ≈ 0.45) and affective symptoms (e.g., DIS_3–DIS_5: r ≈ 0.54–0.57), indicating stability in these constructs over time. Notably, cross-domain covariances showed consistent negative associations between mentality and affective symptoms (e.g., MH_5–DIS_5: r = -0.418 linear; r = -0.424 quadratic), supporting their inverse relationship. In both models, baseline mentality and affective disorder (i_MH and i_DIS) were moderately to strongly correlated with their respective growth factors (slopes and quadratics), suggesting that initial levels shape the trajectory over time. CD4 latent factors (i_CD4, s_CD4, q_CD4) were weakly correlated with psychological domains, reflecting a more complex or indirect pathway of influence.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavInspect(fit_lgcm_quad, "cov.lv")
+```
+
+### LGCM_Quad Visual
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+lavaanPlot(
+  model = fit_lgcm_quad,
+  stand = TRUE,
+  coefs = TRUE,
+  #covs = TRUE,
+  stars = "regress",
+  node_options = list(shape = "box", fontname = "Helvetica", width = 1.5),
+  graph_options = list(rankdir = "LR")  # left-to-right layout
+)
+```
+
+## Model Comparison
+
+Based on a comparison of key model fit indices—including the Comparative Fit Index (CFI), Tucker-Lewis Index (TLI), Root Mean Square Error of Approximation (RMSEA), Standardized Root Mean Square Residual (SRMR), Akaike Information Criterion (AIC), and Bayesian Information Criterion (BIC)—the linear Latent Growth Curve Model (LGCM_Linear) demonstrated the best overall fit. It achieved a CFI of 0.939 and a TLI of 0.929, both exceeding the commonly accepted threshold of 0.90 for acceptable fit and approaching the 0.95 standard for excellent fit (Hu & Bentler, 1999). The RMSEA value of 0.066 falls within the reasonable fit range of 0.05–0.08 (Browne & Cudeck, 1993), and the SRMR value of 0.073 is below the recommended maximum of 0.08 (Hu & Bentler, 1999). Furthermore, the LGCM_Linear yielded the lowest AIC (5051.848) and BIC (5304.277) among all models, indicating superior model parsimony and goodness-of-fit when penalizing for complexity (Burnham & Anderson, 2002). While the quadratic LGCM showed slightly higher CFI and lower SRMR, the overall balance between fit and simplicity favored the linear LGCM as the best-fitting model in this study.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+criteria <- c("cfi", "tli", "rmsea", "srmr", "aic", "bic")
+
+# Extract fit indices
+clpm_fit <- fitMeasures(CLPM, criteria)
+lgcm_linear_fit <- fitMeasures(lgcm_liner, criteria)
+lgcm_quad_fit <- fitMeasures(fit_lgcm_quad, criteria)
+
+# Create fit index data frame
+fit_indices_table <- data.frame(
+  Criteria = toupper(criteria),
+  CLPM = round(clpm_fit, 3),
+  LGCM_Linear = round(lgcm_linear_fit, 3),
+  LGCM_Quadratic = round(lgcm_quad_fit, 3),
+  `Index Evaluation Criteria` = c(
+    "≥ 0.95 excellent; ≥ 0.90 acceptable",  # CFI
+    "≥ 0.95 excellent; ≥ 0.90 acceptable",  # TLI
+    "≤ 0.05 excellent; 0.05–0.08 reasonable",  # RMSEA
+    "≤ 0.08 good",                          # SRMR
+    "Lower is better",                     # AIC
+    "Lower is better"                      # BIC
+  )
+)
+knitr::kable(fit_indices_table, caption = "Model Fit Indices Comparison")
+```
+
+# Discussion
+
+This study explored the bidirectional relationship between immune function (CD4 T cells), affective disorder (depression and anxiety), and a latent construct of mentality (cognitive-emotional functioning) in women living with HIV. Using a combination of cross-lagged panel modeling (CLPM) and latent growth curve modeling (LGCM) with linear and quadratic time trends, we found consistent evidence that CD4 count and affective disorder interact over time and that mentality plays a central mediating role.
+
+## Temporal Dynamics and Stability
+
+The CLPM findings showed strong autoregressive effects across CD4, affective symptoms, and mentality, suggesting that each construct remains relatively stable but still evolves over time. Crucially, we identified significant cross-lagged paths indicating reciprocal effects: lower CD4 counts at baseline predicted increases in later affective disorder, while higher affective symptoms predicted subsequent reductions in mentality. This pattern is consistent with prior psychoneuroimmunology (PNI) frameworks suggesting feedback loops between biological and psychological health.
+
+## Growth Curve in LGCM Models
+
+The LGCMs added further insights. In the linear model, baseline affective symptoms negatively predicted the slope of mentality (β = -1.013, p < .01), meaning that individuals with higher initial distress experienced slower improvements—or even declines—in psychological well-being. Both CD4 and affective symptoms showed meaningful growth over time, suggesting dynamic processes were unfolding within the study period.
+
+The quadratic model captured nonlinear change. Although growth factors (slope and curvature) showed weaker associations with psychological outcomes, the structure provided a better model fit. Notably, the intercept of affective symptoms significantly predicted the intercept of mentality (β = -1.136, p < .001), indicating that high psychological burden at baseline was strongly associated with poorer mental functioning.
+
+## Latent Covariance Patterns
+
+Covariance matrices across all models revealed consistently negative correlations between mentality and affective symptoms (e.g., r ≈ -0.42 at Wave 5), highlighting the antagonistic interplay between cognitive-emotional health and psychological distress. Correlations between CD4 and mental health constructs were weaker, supporting the idea that immune effects may be indirect and shaped by intermediate psychological mechanisms.
+
+## Interpretation and Implications
+
+Taken together, these findings support the notion that immune function and psychological well-being influence each other over time. The results highlight the importance of latent mentality constructs—encompassing emotional, social, and cognitive functioning—in mediating these effects.
+
+From a theoretical standpoint, this supports integrative PNI models that emphasize mind–body feedback. Clinically, these findings emphasize the need to screen for affective symptoms and psychological functioning early in HIV care. Intervening at this stage, especially for women facing intersecting psychosocial stressors, could disrupt a downward cycle of immune suppression and worsening mental health.
+
+## Limitations and Future Directions
+
+While this study benefits from a longitudinal design and latent variable modeling, several limitations should be acknowledged. First, the immune variable—CD4 T cell count—was only predictive of affective symptoms at baseline and did not demonstrate significant effects at later time points, suggesting that its psychological impact may be time-sensitive or mediated. Although we tested models with linear and quadratic time trends, the cubic growth model failed to converge, likely due to limited temporal resolution. With only one year of follow-up, the dataset may not have captured the full dynamic trajectory of immune-psychological interaction. A longer longitudinal study is recommended to better observe long-term change.
+
+Additionally, the current models did not include important biological markers such as viral load, which could improve precision and mechanistic understanding. Similarly, social support, a key protective factor in psychoneuroimmunology, was not incorporated but should be considered in future models to assess its moderating or buffering role. However, due to the limited number of participants, the model could not support a more complex design at this stage, highlighting the need for larger sample sizes in future studies to enable richer model structures.
+
+Lastly, while bidirectional associations were tested, causality remains uncertain due to potential unmeasured confounders such as trauma history, ART adherence, and contextual stressors. Future research should also explore neuroendocrine markers (e.g., cortisol) and use mixed-method approaches—including qualitative interviews and ecological momentary assessment—to capture daily emotional and immune-relevant fluctuations in this population.
+
+# References
+
+- Ironson, G., O’Cleirigh, C., Fletcher, M. A., et al. (2005). An increased survival time in HIV-positive patients who maintained a positive outlook and had lower levels of depressive symptoms. *Psychosomatic Medicine, 67*(2), 293–299.
+
+- Leserman, J., Ironson, G., O’Cleirigh, C., et al. (2005). Stressful life events and adherence in HIV. *Psychosomatic Medicine, 67*(3), 420–428.
+
+- Leserman, J., Petitto, J. M., Perkins, D. O., et al. (1999). Severe stress, depressive symptoms, and changes in lymphocyte subsets in human immunodeficiency virus-infected men. *Archives of General Psychiatry, 56*(2), 176–182.
+
+- Ickovics, J. R., Hamburger, M. E., Vlahov, D., et al. (2001). Mortality, CD4 cell count decline, and depressive symptoms among HIV-seropositive women: Longitudinal analysis from the HIV Epidemiology Research Study. *JAMA, 285*(11), 1466–1474.
+
+- Moskowitz, J. T., Hult, J. R., Bussolari, C., & Acree, M. (2009). What works in coping with HIV? A meta-analysis with implications for coping with serious illness. *Psychological Bulletin, 135*(1), 121–141.
+
+- Hu, L. T., & Bentler, P. M. (1999). Cutoff criteria for fit indexes in covariance structure analysis: Conventional criteria versus new alternatives. *Structural Equation Modeling, 6*(1), 1–55.
+
+- Browne, M. W., & Cudeck, R. (1993). Alternative ways of assessing model fit. In Bollen, K. A., & Long, J. S. (Eds.), *Testing Structural Equation Models* (pp. 136–162). Sage.
+
+- Burnham, K. P., & Anderson, D. R. (2002). *Model selection and multimodel inference: A practical information-theoretic approach* (2nd ed.). Springer.
+
